@@ -35,6 +35,7 @@ const getDefaultPropertyForm = () => ({
   images: []
 })
 
+const MAX_IMAGE_BYTES = 600000
 const slugify = (value = '') => String(value).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
 export default function AdminPage() {
@@ -75,6 +76,10 @@ export default function AdminPage() {
     const readers = Array.from(files).map(file => new Promise((resolve, reject) => {
       if (!file.type.startsWith('image/')) {
         reject(new Error('Only image files are supported'))
+        return
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        reject(new Error('Image file is too large. Please use a smaller photo or add an image URL.'))
         return
       }
       const reader = new FileReader()
@@ -173,8 +178,14 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
         body: JSON.stringify(payload)
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'Failed to add property')
+      let d
+      try {
+        d = await res.json()
+      } catch (parseError) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text ? text : 'Failed to parse server response')
+      }
+      if (!res.ok) throw new Error(d.error || d.message || 'Failed to add property')
       setProperties(prev => [d.property, ...prev])
       setPropertyForm(getDefaultPropertyForm())
       toast.success('Flat added successfully')
@@ -334,7 +345,13 @@ export default function AdminPage() {
                   multiple
                   onChange={e => {
                     if (e.target.files) {
-                      setSelectedFiles(Array.from(e.target.files))
+                      const files = Array.from(e.target.files)
+                      const tooLarge = files.filter(file => file.size > MAX_IMAGE_BYTES)
+                      if (tooLarge.length) {
+                        toast.error('Some images are too large for mobile upload. Use a smaller photo or add an image URL.')
+                        return
+                      }
+                      setSelectedFiles(files)
                     }
                   }}
                   className="mt-1 block w-full text-sm text-navy-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy-900 file:text-white"

@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 
 export const metadata = {
   title: 'FlatsInRanchi — Verified Luxury Flats & Apartments in Ranchi',
-  description: 'Discover premium verified 2BHK, 3BHK & 4BHK flats in Lalpur, Kanke Road, Harmu, Ashok Nagar and across Ranchi. Trusted builders. Best prices. Expert guidance.',
+  description: 'Discover premium verified 2BHK, 3BHK & 4BHK flats in Lalpur, Kanke Road, Harmu, Ashok Nagar and across Ranchi. Trusted listings. Best prices. Expert guidance.',
   keywords: 'flats in ranchi, apartments ranchi, 3bhk ranchi, 2bhk ranchi, lalpur flats, kanke road apartments, verified properties ranchi',
   openGraph: {
     title: 'FlatsInRanchi — Verified Premium Flats in Ranchi',

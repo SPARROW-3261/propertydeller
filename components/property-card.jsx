@@ -4,10 +4,16 @@ import { BadgeCheck, MapPin, Home as HomeIcon, Maximize } from 'lucide-react'
 
 export default function PropertyCard({ p }) {
   const priceLabel = p.priceLakhs >= 100 ? `₹${(p.priceLakhs/100).toFixed(2)} Cr` : `₹${p.priceLakhs} L`
+  const firstImage = p.images?.[0] || ''
+  const isDataUrl = typeof firstImage === 'string' && firstImage.startsWith('data:')
   return (
     <Link href={`/properties/${p.slug}`} className="group block rounded-xl overflow-hidden bg-white border border-navy-900/5 hover:border-gold-300 hover:shadow-xl transition-all duration-300">
       <div className="relative aspect-[4/3] overflow-hidden bg-navy-100">
-        <Image src={p.images?.[0] || ''} alt={p.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-700" />
+        {isDataUrl ? (
+          <img src={firstImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+        ) : (
+          <Image src={firstImage} alt={p.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-700" />
+        )}
         {p.verified && (
           <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur text-[11px] font-medium text-navy-900 shadow-sm">
             <BadgeCheck className="w-3.5 h-3.5 text-gold-600" /> Verified

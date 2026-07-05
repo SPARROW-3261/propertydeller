@@ -20,6 +20,23 @@ const STATUSES = [
   { v: 'closed', label: 'Closed', color: 'bg-gray-200 text-gray-700' }
 ]
 
+const getDefaultPropertyForm = () => ({
+  title: '',
+  locality: '',
+  bhk: '3',
+  area: '',
+  priceLakhs: '',
+  pricePerSqft: '',
+  possession: 'Ready to Move',
+  rera: '',
+  tagline: '',
+  description: '',
+  imageUrl: '',
+  images: []
+})
+
+const slugify = (value = '') => String(value).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
 export default function AdminPage() {
   const [token, setToken] = useState(null)
   const [pwd, setPwd] = useState('')
@@ -29,6 +46,61 @@ export default function AdminPage() {
   const [filter, setFilter] = useState('all')
   const [activeLead, setActiveLead] = useState(null)
   const [note, setNote] = useState('')
+  const [properties, setProperties] = useState([])
+  const [propertyForm, setPropertyForm] = useState(getDefaultPropertyForm())
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const [propertySaving, setPropertySaving] = useState(false)
+
+  const addImage = async () => {
+    const url = propertyForm.imageUrl?.trim()
+    if (url) {
+      if (propertyForm.images.includes(url)) {
+        toast.error('This image URL is already added')
+        return
+      }
+      setPropertyForm(prev => ({ ...prev, images: [...prev.images, url], imageUrl: '' }))
+      return
+    }
+
+    if (selectedFiles.length === 0) {
+      toast.error('Please enter an image URL or choose files to upload')
+      return
+    }
+
+    await readFilesAsDataUrls(selectedFiles)
+    setSelectedFiles([])
+  }
+
+  const readFilesAsDataUrls = async (files) => {
+    const readers = Array.from(files).map(file => new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        reject(new Error('Only image files are supported'))
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    }))
+
+    try {
+      const urls = await Promise.all(readers)
+      setPropertyForm(prev => {
+        const newUrls = urls.filter(url => !prev.images.includes(url))
+        if (newUrls.length === 0) {
+          toast.error('Selected images are already added or invalid')
+          return prev
+        }
+        return { ...prev, images: [...prev.images, ...newUrls] }
+      })
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const removeImageUrl = (index) => {
+    setPropertyForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }))
+  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -37,7 +109,7 @@ export default function AdminPage() {
     }
   }, [])
 
-  useEffect(() => { if (token) loadLeads() }, [token])
+  useEffect(() => { if (token) { loadLeads(); loadProperties() } }, [token])
 
   const login = async (e) => {
     e.preventDefault()
@@ -60,6 +132,70 @@ export default function AdminPage() {
       setLeads(d.leads || [])
       setStats(d.stats || {})
     } catch (e) { toast.error('Failed to load leads') }
+  }
+
+  const loadProperties = async () => {
+    try {
+      const res = await fetch('/api/admin/properties', { headers: { 'x-admin-token': token } })
+      if (res.status === 401) { localStorage.removeItem('fir_admin_token'); setToken(null); return }
+      const d = await res.json()
+      setProperties(d.properties || [])
+    } catch (e) { toast.error('Failed to load properties') }
+  }
+
+  const submitProperty = async (e) => {
+    e.preventDefault()
+    if (!propertyForm.title || !propertyForm.locality || !propertyForm.priceLakhs || !propertyForm.area) {
+      toast.error('Please fill the required property fields')
+      return
+    }
+
+    setPropertySaving(true)
+    try {
+        const payload = {
+        title: propertyForm.title.trim(),
+        locality: propertyForm.locality.trim(),
+        bhk: Number(propertyForm.bhk || 3),
+        area: Number(propertyForm.area),
+        priceLakhs: Number(propertyForm.priceLakhs),
+        pricePerSqft: Number(propertyForm.pricePerSqft || Math.round(Number(propertyForm.priceLakhs) * 1000 / Number(propertyForm.area))),
+        possession: propertyForm.possession.trim(),
+        rera: propertyForm.rera.trim(),
+        tagline: propertyForm.tagline.trim() || `${propertyForm.bhk} BHK homes in ${propertyForm.locality.trim()}`,
+        description: propertyForm.description.trim() || `Premium ${propertyForm.bhk} BHK property in ${propertyForm.locality.trim()}.`,
+        slug: `${slugify(propertyForm.title)}-${slugify(propertyForm.locality)}`,
+        localitySlug: slugify(propertyForm.locality),
+        images: propertyForm.images.length ? propertyForm.images : undefined
+      }
+
+      const res = await fetch('/api/admin/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(payload)
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Failed to add property')
+      setProperties(prev => [d.property, ...prev])
+      setPropertyForm(getDefaultPropertyForm())
+      toast.success('Flat added successfully')
+    } catch (e) { toast.error(e.message) } finally { setPropertySaving(false) }
+  }
+
+  const deleteProperty = async (property) => {
+    if (!window.confirm(`Delete ${property.title} from listings? This cannot be undone.`)) return
+    try {
+      const res = await fetch('/api/admin/properties', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify({ id: property.id, slug: property.slug })
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Failed to delete property')
+      setProperties(prev => prev.filter(p => p.id !== property.id && p.slug !== property.slug))
+      toast.success('Flat deleted successfully')
+    } catch (e) {
+      toast.error(e.message)
+    }
   }
 
   const updateLead = async (id, payload) => {
@@ -130,6 +266,138 @@ export default function AdminPage() {
               <div className="font-display text-3xl mt-0.5">{s.value}</div>
             </button>
           ))}
+        </div>
+
+        <div className="rounded-xl bg-white border border-navy-900/5 p-6 mb-8">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.25em] text-gold-700">Property Manager</div>
+              <h2 className="font-display text-2xl text-navy-900">Add a new flat</h2>
+              <p className="text-sm text-navy-700/70 mt-1">New listings will appear on the public properties page right away.</p>
+            </div>
+            <div className="text-sm text-navy-700/70">Live flats: {properties.length}</div>
+          </div>
+
+          <form onSubmit={submitProperty} className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <Label className="text-xs">Property title</Label>
+              <Input value={propertyForm.title} onChange={e => setPropertyForm(p => ({ ...p, title: e.target.value }))} placeholder="Skyline Heights" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">Locality</Label>
+              <Input value={propertyForm.locality} onChange={e => setPropertyForm(p => ({ ...p, locality: e.target.value }))} placeholder="Lalpur, Ranchi" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">BHK</Label>
+              <Input type="number" min="1" max="4" value={propertyForm.bhk} onChange={e => setPropertyForm(p => ({ ...p, bhk: e.target.value }))} placeholder="3" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">Area (sqft)</Label>
+              <Input type="number" value={propertyForm.area} onChange={e => setPropertyForm(p => ({ ...p, area: e.target.value }))} placeholder="1450" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">Price (lakhs)</Label>
+              <Input type="number" value={propertyForm.priceLakhs} onChange={e => setPropertyForm(p => ({ ...p, priceLakhs: e.target.value }))} placeholder="78" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">Price / sqft</Label>
+              <Input type="number" value={propertyForm.pricePerSqft} onChange={e => setPropertyForm(p => ({ ...p, pricePerSqft: e.target.value }))} placeholder="5379" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">Possession</Label>
+              <Input value={propertyForm.possession} onChange={e => setPropertyForm(p => ({ ...p, possession: e.target.value }))} placeholder="Ready to Move" className="mt-1 h-11" />
+            </div>
+            <div>
+              <Label className="text-xs">RERA No.</Label>
+              <Input value={propertyForm.rera} onChange={e => setPropertyForm(p => ({ ...p, rera: e.target.value }))} placeholder="JHARERA/2024/0001" className="mt-1 h-11" />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Tagline</Label>
+              <Input value={propertyForm.tagline} onChange={e => setPropertyForm(p => ({ ...p, tagline: e.target.value }))} placeholder="Premium 3BHK homes with city views" className="mt-1 h-11" />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Add image</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  value={propertyForm.imageUrl}
+                  onChange={e => setPropertyForm(p => ({ ...p, imageUrl: e.target.value }))}
+                  placeholder="https://example.com/1.jpg"
+                  className="flex-1 h-11"
+                />
+                <Button type="button" onClick={addImage} className="h-11 bg-gold text-navy-900">Add image</Button>
+              </div>
+              <div className="mt-3">
+                <Label className="text-xs">Upload from device</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={e => {
+                    if (e.target.files) {
+                      setSelectedFiles(Array.from(e.target.files))
+                    }
+                  }}
+                  className="mt-1 block w-full text-sm text-navy-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy-900 file:text-white"
+                />
+                {selectedFiles.length > 0 && (
+                  <div className="mt-2 text-xs text-navy-700/70">
+                    Selected files: {selectedFiles.map(file => file.name).join(', ')}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-navy-700/60 mt-2">Use the URL field or select files. Then click Add image to submit whichever you entered.</p>
+              {propertyForm.images.length > 0 && (
+                <div className="mt-3 grid gap-2">
+                  {propertyForm.images.map((src, index) => (
+                    <div key={src} className="flex items-center gap-3 rounded-xl border border-navy-900/5 p-3 bg-cream-50">
+                      <img src={src} alt={`Preview ${index + 1}`} className="h-14 w-20 rounded-lg object-cover" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-navy-900 truncate">{src}</div>
+                        <div className="text-xs text-navy-700/70">Image {index + 1}</div>
+                      </div>
+                      <Button type="button" variant="outline" className="h-10 px-3" onClick={() => removeImageUrl(index)}>Delete</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Description</Label>
+              <Textarea value={propertyForm.description} onChange={e => setPropertyForm(p => ({ ...p, description: e.target.value }))} rows={4} placeholder="Describe the flat, amenities, and highlights." className="mt-1" />
+            </div>
+            <div className="md:col-span-2 flex justify-end">
+              <Button type="submit" disabled={propertySaving} className="bg-navy-900 text-white">
+                {propertySaving ? 'Adding flat...' : 'Add flat'}
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        <div className="rounded-xl bg-white border border-navy-900/5 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-xl text-navy-900">Recently added flats</h3>
+            <div className="text-sm text-navy-700/70">{properties.length} total</div>
+          </div>
+          {properties.length === 0 ? (
+            <div className="text-sm text-navy-700/60">No flats added yet.</div>
+          ) : (
+            <div className="grid gap-3">{properties.slice(0, 6).map(p => (
+              <div key={p.id || p.slug} className="flex flex-col gap-3 rounded-lg border border-navy-900/5 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-semibold text-navy-900">{p.title}</div>
+                    <div className="text-sm text-navy-700/70">{p.builder} • {p.locality}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gold-700">₹{p.priceLakhs} L</div>
+                    <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => deleteProperty(p)}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}</div>
+          )}
         </div>
 
         {/* LEADS TABLE */}

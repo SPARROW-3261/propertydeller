@@ -64,7 +64,11 @@ export default function PropertyDetailPage() {
         <div className="text-xs text-navy-700/70 mb-3"><Link href="/" className="hover:text-gold-700">Home</Link> / <Link href="/properties" className="hover:text-gold-700">Properties</Link> / <span className="text-navy-900">{p.title}</span></div>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           <div className="md:col-span-8 relative aspect-[16/10] rounded-xl overflow-hidden">
-            <Image src={p.images[activeImg]} alt={p.title} fill priority className="object-cover" sizes="(max-width: 768px) 100vw, 66vw" />
+            {typeof p.images[activeImg] === 'string' && p.images[activeImg].startsWith('data:') ? (
+              <img src={p.images[activeImg]} alt={p.title} className="w-full h-full object-cover" />
+            ) : (
+              <Image src={p.images[activeImg]} alt={p.title} fill priority className="object-cover" sizes="(max-width: 768px) 100vw, 66vw" />
+            )}
             {p.verified && <div className="absolute top-4 left-4 inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur text-xs font-medium"><BadgeCheck className="w-4 h-4 text-gold-600" /> RERA Verified — {p.rera}</div>}
           </div>
           <div className="md:col-span-4 grid grid-cols-2 md:grid-cols-1 gap-3">
@@ -117,7 +121,6 @@ export default function PropertyDetailPage() {
             <TabsList className="bg-cream-100 p-1 h-auto">
               <TabsTrigger value="amenities" className="data-[state=active]:bg-navy-900 data-[state=active]:text-white px-5 py-2">Amenities</TabsTrigger>
               <TabsTrigger value="location" className="data-[state=active]:bg-navy-900 data-[state=active]:text-white px-5 py-2">Location</TabsTrigger>
-              <TabsTrigger value="builder" className="data-[state=active]:bg-navy-900 data-[state=active]:text-white px-5 py-2">Builder</TabsTrigger>
             </TabsList>
             <TabsContent value="amenities" className="pt-6">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -134,15 +137,6 @@ export default function PropertyDetailPage() {
                 {[{ k: 'Birsa Munda Airport', v: '12 km' }, { k: 'Ranchi Junction', v: '6 km' }, { k: 'Main Road Mall', v: '3 km' }, { k: 'DPS School', v: '2 km' }, { k: 'RIMS Hospital', v: '4 km' }, { k: 'Big Bazaar', v: '1 km' }].map((x, i) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-white border border-navy-900/5"><span className="text-navy-700">{x.k}</span><span className="text-gold-700 font-medium">{x.v}</span></div>
                 ))}
-              </div>
-            </TabsContent>
-            <TabsContent value="builder" className="pt-6">
-              <div className="flex items-start gap-4 p-5 rounded-xl bg-white border border-navy-900/5">
-                <div className="w-14 h-14 rounded-lg gold-gradient grid place-items-center font-display font-bold text-2xl text-navy-900">{p.builder[0]}</div>
-                <div>
-                  <div className="font-display text-2xl text-navy-900">{p.builder}</div>
-                  <p className="text-sm text-navy-700/80 mt-1">A renowned developer with a track record of premium residential projects across Ranchi. Known for quality construction, on-time delivery and customer-first service.</p>
-                </div>
               </div>
             </TabsContent>
           </Tabs>

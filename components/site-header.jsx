@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button'
 
 const NAV = [
   { href: '/properties', label: 'Properties' },
-  { href: '/builders', label: 'Builders' },
   { href: '/properties?locality=lalpur', label: 'Localities' },
-  { href: '/contact', label: 'Contact' }
+  { href: '/contact', label: 'Contact' },
+  { href: '/admin', label: 'Admin' }
 ]
 
 export default function SiteHeader() {

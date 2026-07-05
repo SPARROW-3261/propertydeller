@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, MapPin, BadgeCheck, ShieldCheck, Users, TrendingUp, Star, ArrowRight, Award, Phone } from 'lucide-react'
-import { HERO_IMAGE, HERO_SECONDARY, CTA_IMAGE, LOCALITIES, BUILDERS, TESTIMONIALS } from '@/lib/seed-data'
+import { HERO_IMAGE, HERO_SECONDARY, CTA_IMAGE, LOCALITIES, TESTIMONIALS } from '@/lib/seed-data'
 
 const App = () => {
   const router = useRouter()
@@ -56,7 +56,7 @@ const App = () => {
               Find your perfect flat <span className="text-gold-300 italic">in Ranchi</span>
             </h1>
             <p className="text-white/85 text-lg md:text-xl mt-6 max-w-2xl leading-relaxed">
-              Hand-picked, RERA-verified luxury homes from Ranchi&apos;s top builders. From Lalpur to Kanke Road — your dream address awaits.
+              Hand-picked, RERA-verified luxury homes across Ranchi. From Lalpur to Kanke Road — your dream address awaits.
             </p>
           </div>
 
@@ -103,53 +103,7 @@ const App = () => {
 
           <div className="mt-10 flex items-center gap-8 text-white/80 text-sm">
             <div><div className="font-display text-2xl text-white">120+</div>Verified flats</div>
-            <div><div className="font-display text-2xl text-white">15+</div>Top builders</div>
             <div><div className="font-display text-2xl text-white">4,800+</div>Happy families</div>
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURED PROPERTIES */}
-      <section className="container py-20 md:py-28">
-        <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
-          <div>
-            <div className="text-xs uppercase tracking-[0.25em] text-gold-600 mb-2">Curated for you</div>
-            <h2 className="font-display text-3xl md:text-5xl text-navy-900">Featured Properties</h2>
-            <p className="text-navy-700/80 mt-2 max-w-xl">Hand-picked premium residences from Ranchi&apos;s most reputable developers.</p>
-          </div>
-          <Link href="/properties"><Button variant="ghost" className="text-navy-900 hover:text-gold-700">View all <ArrowRight className="w-4 h-4 ml-1" /></Button></Link>
-        </div>
-        {featured.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-white border border-navy-900/5 animate-pulse" />)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featured.map(p => <PropertyCard key={p.id || p.slug} p={p} />)}
-          </div>
-        )}
-      </section>
-
-      {/* WHY CHOOSE US */}
-      <section className="bg-navy-900 text-cream py-20 md:py-28">
-        <div className="container">
-          <div className="max-w-2xl">
-            <div className="text-xs uppercase tracking-[0.25em] text-gold-300 mb-2">The FlatsInRanchi promise</div>
-            <h2 className="font-display text-3xl md:text-5xl text-white">Why families trust us with their biggest decision</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-            {[
-              { icon: ShieldCheck, title: '100% Verified', text: 'Every listing is RERA-checked & physically inspected by our team.' },
-              { icon: Users, title: 'Expert Guidance', text: 'Dedicated relationship managers walk you through every step.' },
-              { icon: TrendingUp, title: 'Best Price', text: 'Direct from builders with no broker margins — you save lakhs.' },
-              { icon: Award, title: 'Premium Only', text: 'We curate only the top 5% of homes that meet our standards.' }
-            ].map((f, i) => (
-              <div key={i} className="p-6 rounded-xl border border-white/10 hover:border-gold/40 hover:bg-white/5 transition">
-                <div className="w-11 h-11 rounded-lg gold-gradient grid place-items-center text-navy-900 mb-4"><f.icon className="w-5 h-5" /></div>
-                <div className="font-display text-xl text-white mb-1.5">{f.title}</div>
-                <p className="text-sm text-cream/70 leading-relaxed">{f.text}</p>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -176,29 +130,51 @@ const App = () => {
         </div>
       </section>
 
-      {/* BUILDERS */}
-      <section className="bg-cream-100 py-20 md:py-28">
+      {/* WHY CHOOSE US */}
+      <section className="bg-navy-900 text-cream py-20 md:py-28">
         <div className="container">
-          <div className="max-w-2xl mb-10">
-            <div className="text-xs uppercase tracking-[0.25em] text-gold-600 mb-2">Trusted partners</div>
-            <h2 className="font-display text-3xl md:text-5xl text-navy-900">Featured Builders</h2>
+          <div className="max-w-2xl">
+            <div className="text-xs uppercase tracking-[0.25em] text-gold-300 mb-2">The FlatsInRanchi promise</div>
+            <h2 className="font-display text-3xl md:text-5xl text-white">Why families trust us with their biggest decision</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {BUILDERS.map(b => (
-              <div key={b.slug} className="p-7 rounded-xl bg-white border border-navy-900/5 hover:shadow-xl transition group">
-                <div className="w-14 h-14 rounded-lg gold-gradient grid place-items-center text-navy-900 font-display font-bold text-xl">{b.name[0]}</div>
-                <div className="font-display text-2xl text-navy-900 mt-5">{b.name}</div>
-                <div className="text-sm text-gold-700 mt-0.5">{b.tagline}</div>
-                <p className="text-sm text-navy-700/70 mt-3 leading-relaxed">{b.description}</p>
-                <div className="flex items-center justify-between mt-6 pt-5 border-t border-navy-900/5">
-                  <div><div className="font-display text-2xl text-navy-900">{b.projects}+</div><div className="text-[11px] uppercase tracking-wider text-navy-700/60">Projects</div></div>
-                  <Link href={`/properties?builder=${b.slug}`} className="text-sm text-navy-900 hover:text-gold-700 inline-flex items-center gap-1">View properties <ArrowRight className="w-3.5 h-3.5" /></Link>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+            {[
+              { icon: ShieldCheck, title: '100% Verified', text: 'Every listing is RERA-checked & physically inspected by our team.' },
+              { icon: Users, title: 'Expert Guidance', text: 'Dedicated relationship managers walk you through every step.' },
+              { icon: TrendingUp, title: 'Best Price', text: 'Direct from verified sellers with no broker margins — you save lakhs.' },
+              { icon: Award, title: 'Premium Only', text: 'We curate only the top 5% of homes that meet our standards.' }
+            ].map((f, i) => (
+              <div key={i} className="p-6 rounded-xl border border-white/10 hover:border-gold/40 hover:bg-white/5 transition">
+                <div className="w-11 h-11 rounded-lg gold-gradient grid place-items-center text-navy-900 mb-4"><f.icon className="w-5 h-5" /></div>
+                <div className="font-display text-xl text-white mb-1.5">{f.title}</div>
+                <p className="text-sm text-cream/70 leading-relaxed">{f.text}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
+
+      {/* FEATURED PROPERTIES */}
+      <section className="container py-20 md:py-28">
+        <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-gold-600 mb-2">Curated for you</div>
+            <h2 className="font-display text-3xl md:text-5xl text-navy-900">Featured Properties</h2>
+            <p className="text-navy-700/80 mt-2 max-w-xl">Hand-picked premium residences from Ranchi&apos;s most reputable developers.</p>
+          </div>
+          <Link href="/properties"><Button variant="ghost" className="text-navy-900 hover:text-gold-700">View all <ArrowRight className="w-4 h-4 ml-1" /></Button></Link>
+        </div>
+        {featured.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-white border border-navy-900/5 animate-pulse" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featured.map(p => <PropertyCard key={p.id || p.slug} p={p} />)}
+          </div>
+        )}
+      </section>
+
 
       {/* TESTIMONIALS */}
       <section className="container py-20 md:py-28">

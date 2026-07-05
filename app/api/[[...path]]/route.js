@@ -1,8 +1,11 @@
 import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
-import { PROPERTIES, BUILDERS, LOCALITIES } from '@/lib/seed-data'
+import fs from 'fs/promises'
+import path from 'path'
+import { PROPERTIES, LOCALITIES } from '@/lib/seed-data'
 
+const ADMIN_PROPERTIES_FILE = path.join(process.cwd(), 'admin-properties.json')
 let client
 let db
 
@@ -26,14 +29,108 @@ export async function OPTIONS() { return cors(new NextResponse(null, { status: 2
 
 function clean(doc) { if (!doc) return doc; const { _id, ...rest } = doc; return rest }
 
+let fallbackProperties = null
+let storedAdminProperties = null
+
+async function readAdminProperties() {
+  try {
+    const raw = await fs.readFile(ADMIN_PROPERTIES_FILE, 'utf8')
+    return JSON.parse(raw) || []
+  } catch (error) {
+    return []
+  }
+}
+
+async function writeAdminProperties(properties) {
+  try {
+    await fs.writeFile(ADMIN_PROPERTIES_FILE, JSON.stringify(properties || [], null, 2), 'utf8')
+  } catch (error) {
+    console.error('Failed to write admin-properties.json', error)
+  }
+}
+
+async function getFallbackProperties() {
+  if (!fallbackProperties) {
+    storedAdminProperties = await readAdminProperties()
+    fallbackProperties = [
+      ...storedAdminProperties.map(item => ({ ...item })),
+      ...PROPERTIES.map(property => ({ ...property }))
+    ]
+  }
+  return fallbackProperties
+}
+
+async function addAdminProperty(property) {
+  storedAdminProperties = storedAdminProperties || await readAdminProperties()
+  storedAdminProperties.unshift(property)
+  await writeAdminProperties(storedAdminProperties)
+  if (fallbackProperties) fallbackProperties.unshift(property)
+}
+
+async function deleteAdminProperty(identifier) {
+  storedAdminProperties = storedAdminProperties || await readAdminProperties()
+  const remaining = storedAdminProperties.filter(item => item.id !== identifier && item.slug !== identifier)
+  if (remaining.length === storedAdminProperties.length) return false
+  storedAdminProperties = remaining
+  await writeAdminProperties(storedAdminProperties)
+  if (fallbackProperties) {
+    fallbackProperties = fallbackProperties.filter(item => item.id !== identifier && item.slug !== identifier)
+  }
+  return true
+}
+
+function slugify(value = '') {
+  return String(value).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+function buildPropertyFromBody(body = {}) {
+  const title = String(body.title || '').trim()
+  const builder = String(body.builder || '').trim()
+  const locality = String(body.locality || '').trim()
+  const bhk = Number(body.bhk || 3)
+  const area = Number(body.area || 0)
+  const priceLakhs = Number(body.priceLakhs || 0)
+  const pricePerSqft = Number(body.pricePerSqft || (priceLakhs > 0 && area > 0 ? Math.round(priceLakhs * 100000 / area) : 0))
+  const possession = String(body.possession || 'Ready to Move').trim()
+  const titleSlug = slugify(title) || 'new-flat'
+  const localitySlug = slugify(body.localitySlug || locality) || 'ranchi'
+  const builderSlug = slugify(body.builderSlug || builder) || 'builder'
+  return {
+    id: uuidv4(),
+    slug: String(body.slug || `${titleSlug}-${localitySlug}`),
+    title,
+    builder,
+    builderSlug,
+    locality,
+    localitySlug,
+    bhk,
+    area,
+    priceLakhs,
+    pricePerSqft,
+    possession,
+    verified: body.verified !== false,
+    lat: Number(body.lat || 23.35),
+    lng: Number(body.lng || 85.31),
+    tagline: String(body.tagline || `${bhk} BHK homes in ${locality}`).trim(),
+    description: String(body.description || `Premium ${bhk} BHK property by ${builder} in ${locality}.`).trim(),
+    images: body.images || [
+      'https://images.pexels.com/photos/9308434/pexels-photo-9308434.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940',
+      'https://images.pexels.com/photos/2030037/pexels-photo-2030037.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'
+    ],
+    amenities: body.amenities || ['Swimming Pool', 'Gymnasium', '24x7 Security', 'Power Backup'],
+    floors: Number(body.floors || 12),
+    totalUnits: Number(body.totalUnits || 48),
+    rera: String(body.rera || 'JHARERA/2024/9999').trim(),
+    createdAt: new Date()
+  }
+}
+
 async function ensureSeed(db) {
   const count = await db.collection('properties').countDocuments()
   if (count === 0) {
     const now = new Date()
     const props = PROPERTIES.map(p => ({ id: uuidv4(), ...p, createdAt: now }))
     await db.collection('properties').insertMany(props)
-    const builders = BUILDERS.map(b => ({ id: uuidv4(), ...b, createdAt: now }))
-    await db.collection('builders').insertMany(builders)
     const locs = LOCALITIES.map(l => ({ id: uuidv4(), ...l, createdAt: now }))
     await db.collection('localities').insertMany(locs)
     return { seeded: true, properties: props.length }
@@ -86,7 +183,6 @@ function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({ '&':'&a
 
 function matchesProperty(property, q) {
   if (q.get('locality') && property.localitySlug !== q.get('locality')) return false
-  if (q.get('builder') && property.builderSlug !== q.get('builder')) return false
   if (q.get('bhk') && property.bhk !== parseInt(q.get('bhk'))) return false
   if (q.get('possession') && property.possession !== q.get('possession')) return false
   if (q.get('verified') === 'true' && !property.verified) return false
@@ -111,36 +207,30 @@ function sortProperties(properties, sort = 'recommended') {
   })
 }
 
-function fallbackRoute(route, method, url, path) {
+async function fallbackRoute(route, method, url, path) {
   if ((route === '/' || route === '/health') && method === 'GET') {
     return cors(NextResponse.json({ ok: true, service: 'flatsinranchi', source: 'fallback', time: new Date().toISOString() }))
   }
 
   if (route === '/properties' && method === 'GET') {
     const q = url.searchParams
-    const properties = sortProperties(PROPERTIES.filter(property => matchesProperty(property, q)), q.get('sort') || 'recommended').slice(0, 60)
+    const properties = sortProperties((await getFallbackProperties()).filter(property => matchesProperty(property, q)), q.get('sort') || 'recommended').slice(0, 60)
     return cors(NextResponse.json({ properties, total: properties.length, source: 'fallback' }))
   }
 
   if (path[0] === 'properties' && path[1] && method === 'GET' && path.length === 2) {
-    const property = PROPERTIES.find(item => item.slug === path[1])
+    const props = await getFallbackProperties()
+    const property = props.find(item => item.slug === path[1])
     if (!property) return cors(NextResponse.json({ error: 'Property not found' }, { status: 404 }))
-    const related = PROPERTIES.filter(item => item.localitySlug === property.localitySlug && item.slug !== property.slug).slice(0, 3)
+    const related = props.filter(item => item.localitySlug === property.localitySlug && item.slug !== property.slug).slice(0, 3)
     return cors(NextResponse.json({ property, related, source: 'fallback' }))
   }
 
-  if (route === '/builders' && method === 'GET') {
-    const builders = BUILDERS.map(builder => ({
-      ...builder,
-      activeProjects: PROPERTIES.filter(property => property.builderSlug === builder.slug).length
-    }))
-    return cors(NextResponse.json({ builders, source: 'fallback' }))
-  }
-
   if (route === '/localities' && method === 'GET') {
+    const allProps = await getFallbackProperties()
     const localities = LOCALITIES.map(locality => ({
       ...locality,
-      count: PROPERTIES.filter(property => property.localitySlug === locality.slug).length || locality.count
+      count: allProps.filter(property => property.localitySlug === locality.slug).length || locality.count
     }))
     return cors(NextResponse.json({ localities, source: 'fallback' }))
   }
@@ -154,13 +244,38 @@ async function handleRoute(request, { params }) {
   const method = request.method
   const url = new URL(request.url)
 
+  if (route === '/admin/login' && method === 'POST') {
+    const body = await request.json()
+    const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+    if (body.password === expectedPassword) {
+      return cors(NextResponse.json({ ok: true, token: expectedPassword }))
+    }
+    return cors(NextResponse.json({ ok: false, error: 'Invalid password' }, { status: 401 }))
+  }
+
   try {
     let db
     try {
       db = await connectToMongo()
       await ensureSeed(db)
     } catch (mongoError) {
-      const fallback = fallbackRoute(route, method, url, path)
+      if (route === '/admin/properties' && method === 'GET') {
+        return cors(NextResponse.json({ properties: (await getFallbackProperties()).slice(0, 100).map(clean), source: 'fallback' }))
+      }
+      if (route === '/admin/properties' && method === 'POST') {
+        const body = await request.json().catch(() => ({}))
+        const property = buildPropertyFromBody(body)
+        await addAdminProperty(property)
+        return cors(NextResponse.json({ ok: true, property, source: 'fallback' }))
+      }
+      if (route === '/admin/properties' && method === 'DELETE') {
+        const body = await request.json().catch(() => ({}))
+        const identifier = body.id || body.slug
+        if (!identifier) return cors(NextResponse.json({ error: 'Property id or slug is required' }, { status: 400 }))
+        const deleted = await deleteAdminProperty(identifier)
+        return cors(NextResponse.json({ ok: deleted, source: 'fallback' }))
+      }
+      const fallback = await fallbackRoute(route, method, url, path)
       if (fallback) return fallback
       throw mongoError
     }
@@ -172,7 +287,6 @@ async function handleRoute(request, { params }) {
     if (route === '/seed' && method === 'POST') {
       // Force re-seed (drops then inserts)
       await db.collection('properties').deleteMany({})
-      await db.collection('builders').deleteMany({})
       await db.collection('localities').deleteMany({})
       const r = await ensureSeed(db)
       return cors(NextResponse.json(r))
@@ -183,7 +297,6 @@ async function handleRoute(request, { params }) {
       const q = url.searchParams
       const filter = {}
       if (q.get('locality')) filter.localitySlug = q.get('locality')
-      if (q.get('builder')) filter.builderSlug = q.get('builder')
       if (q.get('bhk')) filter.bhk = parseInt(q.get('bhk'))
       if (q.get('possession')) filter.possession = q.get('possession')
       if (q.get('verified') === 'true') filter.verified = true
@@ -197,7 +310,7 @@ async function handleRoute(request, { params }) {
       const search = q.get('q')
       if (search) {
         const re = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-        filter.$or = [ { title: re }, { locality: re }, { builder: re }, { tagline: re } ]
+        filter.$or = [ { title: re }, { locality: re }, { tagline: re } ]
       }
       const sort = q.get('sort') || 'recommended'
       const sortObj = sort === 'priceAsc' ? { priceLakhs: 1 } : sort === 'priceDesc' ? { priceLakhs: -1 } : { verified: -1, createdAt: -1 }
@@ -213,14 +326,6 @@ async function handleRoute(request, { params }) {
       // related: same locality, exclude self
       const related = await db.collection('properties').find({ localitySlug: doc.localitySlug, slug: { $ne: slug } }).limit(3).toArray()
       return cors(NextResponse.json({ property: clean(doc), related: related.map(clean) }))
-    }
-
-    // GET /api/builders
-    if (route === '/builders' && method === 'GET') {
-      const docs = await db.collection('builders').find({}).toArray()
-      const counts = await db.collection('properties').aggregate([{ $group: { _id: '$builderSlug', count: { $sum: 1 } } }]).toArray()
-      const countMap = Object.fromEntries(counts.map(c => [c._id, c.count]))
-      return cors(NextResponse.json({ builders: docs.map(d => ({ ...clean(d), activeProjects: countMap[d.slug] || 0 })) }))
     }
 
     // GET /api/localities
@@ -261,15 +366,17 @@ async function handleRoute(request, { params }) {
     // POST /api/admin/login
     if (route === '/admin/login' && method === 'POST') {
       const body = await request.json()
-      if (body.password === process.env.ADMIN_PASSWORD) {
-        return cors(NextResponse.json({ ok: true, token: process.env.ADMIN_PASSWORD }))
+      const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+      if (body.password === expectedPassword) {
+        return cors(NextResponse.json({ ok: true, token: expectedPassword }))
       }
       return cors(NextResponse.json({ ok: false, error: 'Invalid password' }, { status: 401 }))
     }
 
     // Admin-protected routes
     const adminToken = request.headers.get('x-admin-token')
-    const isAdmin = adminToken === process.env.ADMIN_PASSWORD
+    const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+    const isAdmin = adminToken === expectedPassword
 
     if (route === '/admin/leads' && method === 'GET') {
       if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
@@ -302,14 +409,36 @@ async function handleRoute(request, { params }) {
       return cors(NextResponse.json({ ok: true, lead: clean(updated) }))
     }
 
+    if (route === '/admin/properties' && method === 'GET') {
+      if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const docs = await db.collection('properties').find({}).sort({ createdAt: -1 }).limit(100).toArray()
+      return cors(NextResponse.json({ properties: docs.map(clean) }))
+    }
+
+    if (route === '/admin/properties' && method === 'POST') {
+      if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const body = await request.json()
+      const property = buildPropertyFromBody(body)
+      await db.collection('properties').insertOne(property)
+      return cors(NextResponse.json({ ok: true, property }))
+    }
+
+    if (route === '/admin/properties' && method === 'DELETE') {
+      if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const body = await request.json().catch(() => ({}))
+      const identifier = body.id || body.slug
+      if (!identifier) return cors(NextResponse.json({ error: 'Property id or slug is required' }, { status: 400 }))
+      const result = await db.collection('properties').deleteOne({ $or: [{ id: identifier }, { slug: identifier }] })
+      return cors(NextResponse.json({ ok: result.deletedCount > 0 }))
+    }
+
     if (route === '/admin/stats' && method === 'GET') {
       if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
-      const [leads, properties, builders] = await Promise.all([
+      const [leads, properties] = await Promise.all([
         db.collection('leads').countDocuments(),
-        db.collection('properties').countDocuments(),
-        db.collection('builders').countDocuments()
+        db.collection('properties').countDocuments()
       ])
-      return cors(NextResponse.json({ leads, properties, builders }))
+      return cors(NextResponse.json({ leads, properties }))
     }
 
     return cors(NextResponse.json({ error: `Route ${route} not found` }, { status: 404 }))

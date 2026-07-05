@@ -21,7 +21,6 @@ export default function SiteFooter() {
           <div className="text-xs uppercase tracking-[0.2em] text-gold-300 mb-4">Explore</div>
           <ul className="space-y-2.5 text-sm">
             <li><Link className="hover:text-gold-300" href="/properties">All Properties</Link></li>
-            <li><Link className="hover:text-gold-300" href="/builders">Builders</Link></li>
             <li><Link className="hover:text-gold-300" href="/properties?bhk=3">3 BHK Flats</Link></li>
             <li><Link className="hover:text-gold-300" href="/properties?bhk=2">2 BHK Flats</Link></li>
           </ul>

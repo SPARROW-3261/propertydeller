@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
-import { LOCALITIES, BUILDERS } from '@/lib/seed-data'
+import { LOCALITIES } from '@/lib/seed-data'
 
 function PropertiesInner() {
   const router = useRouter()
@@ -22,7 +22,6 @@ function PropertiesInner() {
   const filters = {
     locality: sp.get('locality') || '',
     bhk: sp.get('bhk') || '',
-    builder: sp.get('builder') || '',
     possession: sp.get('possession') || '',
     minBudget: sp.get('minBudget') || '',
     maxBudget: sp.get('maxBudget') || ''
@@ -58,7 +57,7 @@ function PropertiesInner() {
           <form onSubmit={submitSearch} className="mt-6 max-w-2xl flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-700" />
-              <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, locality, builder..." className="pl-10 h-12 bg-white text-navy-900 border-0" />
+              <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name or locality..." className="pl-10 h-12 bg-white text-navy-900 border-0" />
             </div>
             <Button type="submit" className="h-12 px-6 bg-gold hover:bg-gold-600 text-navy-900 font-semibold">Search</Button>
           </form>
@@ -76,10 +75,6 @@ function PropertiesInner() {
           <Select value={filters.bhk || 'any'} onValueChange={v => update('bhk', v)}>
             <SelectTrigger className="w-[110px] h-10 bg-white"><SelectValue placeholder="BHK" /></SelectTrigger>
             <SelectContent><SelectItem value="any">Any BHK</SelectItem><SelectItem value="2">2 BHK</SelectItem><SelectItem value="3">3 BHK</SelectItem><SelectItem value="4">4 BHK</SelectItem></SelectContent>
-          </Select>
-          <Select value={filters.builder || 'any'} onValueChange={v => update('builder', v)}>
-            <SelectTrigger className="w-[170px] h-10 bg-white"><SelectValue placeholder="Builder" /></SelectTrigger>
-            <SelectContent><SelectItem value="any">All builders</SelectItem>{BUILDERS.map(b => <SelectItem key={b.slug} value={b.slug}>{b.name}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={filters.possession || 'any'} onValueChange={v => update('possession', v)}>
             <SelectTrigger className="w-[160px] h-10 bg-white"><SelectValue placeholder="Possession" /></SelectTrigger>

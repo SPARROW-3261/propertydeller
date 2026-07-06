@@ -11,9 +11,12 @@ let db
 
 async function connectToMongo() {
   if (!client) {
-    client = new MongoClient(process.env.MONGO_URL, { serverSelectionTimeoutMS: 1500 })
+    const mongoUrl = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017'
+    const dbName = process.env.DB_NAME || 'propertydeller'
+    console.log('connectToMongo: using mongoUrl=', mongoUrl, 'dbName=', dbName)
+    client = new MongoClient(mongoUrl, { serverSelectionTimeoutMS: 1500 })
     await client.connect()
-    db = client.db(process.env.DB_NAME)
+    db = client.db(dbName)
   }
   return db
 }
@@ -58,6 +61,56 @@ async function getFallbackProperties() {
     ]
   }
   return fallbackProperties
+}
+
+const ADMIN_LEADS_FILE = path.join(process.cwd(), 'admin-leads.json')
+let storedAdminLeads = null
+
+async function readAdminLeads() {
+  try {
+    const raw = await fs.readFile(ADMIN_LEADS_FILE, 'utf8')
+    return JSON.parse(raw) || []
+  } catch (error) {
+    return []
+  }
+}
+
+async function writeAdminLeads(leads) {
+  try {
+    await fs.writeFile(ADMIN_LEADS_FILE, JSON.stringify(leads || [], null, 2), 'utf8')
+  } catch (error) {
+    console.error('Failed to write admin-leads.json', error)
+  }
+}
+
+async function addAdminLead(lead) {
+  storedAdminLeads = storedAdminLeads || await readAdminLeads()
+  storedAdminLeads.unshift(lead)
+  await writeAdminLeads(storedAdminLeads)
+}
+
+async function updateAdminLead(id, update) {
+  storedAdminLeads = storedAdminLeads || await readAdminLeads()
+  const index = storedAdminLeads.findIndex(l => l.id === id)
+  if (index !== -1) {
+    storedAdminLeads[index] = { ...storedAdminLeads[index], ...update }
+    if (update.$push && update.$push.notes) {
+      storedAdminLeads[index].notes = storedAdminLeads[index].notes || []
+      storedAdminLeads[index].notes.push(update.$push.notes)
+    }
+    await writeAdminLeads(storedAdminLeads)
+    return storedAdminLeads[index]
+  }
+  return null
+}
+
+async function deleteAdminLead(id) {
+  storedAdminLeads = storedAdminLeads || await readAdminLeads()
+  const remaining = storedAdminLeads.filter(l => l.id !== id)
+  if (remaining.length === storedAdminLeads.length) return false
+  storedAdminLeads = remaining
+  await writeAdminLeads(storedAdminLeads)
+  return true
 }
 
 async function addAdminProperty(property) {
@@ -207,7 +260,7 @@ function sortProperties(properties, sort = 'recommended') {
   })
 }
 
-async function fallbackRoute(route, method, url, path) {
+async function fallbackRoute(route, method, url, path, request) {
   if ((route === '/' || route === '/health') && method === 'GET') {
     return cors(NextResponse.json({ ok: true, service: 'flatsinranchi', source: 'fallback', time: new Date().toISOString() }))
   }
@@ -235,6 +288,75 @@ async function fallbackRoute(route, method, url, path) {
     return cors(NextResponse.json({ localities, source: 'fallback' }))
   }
 
+  if (route === '/leads' && method === 'POST') {
+    const body = await request.json().catch(() => ({}))
+    if (!body.name || !body.mobile) {
+      return cors(NextResponse.json({ error: 'name and mobile are required' }, { status: 400 }))
+    }
+    const lead = {
+      id: uuidv4(),
+      name: String(body.name).slice(0, 100),
+      mobile: String(body.mobile).slice(0, 20),
+      email: body.email ? String(body.email).slice(0, 120) : null,
+      budget: body.budget || null,
+      propertySlug: body.propertySlug || null,
+      propertyTitle: body.propertyTitle || null,
+      message: body.message ? String(body.message).slice(0, 1000) : '',
+      source: body.source || 'website',
+      status: 'new',
+      notes: [],
+      createdAt: new Date()
+    }
+    let property = null
+    if (lead.propertySlug) {
+      const props = await getFallbackProperties()
+      property = props.find(p => p.slug === lead.propertySlug)
+    }
+    await addAdminLead(lead)
+    const emailResult = await sendLeadEmail(lead, property)
+    return cors(NextResponse.json({ ok: true, leadId: lead.id, email: emailResult, source: 'fallback' }))
+  }
+
+  const adminToken = request.headers.get('x-admin-token')
+  const expectedPassword = process.env.ADMIN_PASSWORD || 'Property@2026'
+  const isAdmin = adminToken === expectedPassword
+
+  if (route === '/admin/leads' && method === 'GET') {
+    if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+    const leads = await readAdminLeads()
+    const stats = {
+      total: leads.length,
+      new: leads.filter(l => l.status === 'new').length,
+      contacted: leads.filter(l => l.status === 'contacted').length,
+      qualified: leads.filter(l => l.status === 'qualified').length,
+      siteVisit: leads.filter(l => l.status === 'site_visit').length,
+      booking: leads.filter(l => l.status === 'booking').length,
+      closed: leads.filter(l => l.status === 'closed').length
+    }
+    return cors(NextResponse.json({ leads, stats, source: 'fallback' }))
+  }
+
+  if (path[0] === 'admin' && path[1] === 'leads' && path[2] && method === 'PATCH') {
+    if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+    const id = path[2]
+    const body = await request.json().catch(() => ({}))
+    const update = {}
+    if (body.status) update.status = body.status
+    if (body.note) update['$push'] = { notes: { text: body.note, at: new Date() } }
+    
+    const updated = await updateAdminLead(id, update)
+    if (!updated) return cors(NextResponse.json({ error: 'Lead not found' }, { status: 404 }))
+    return cors(NextResponse.json({ ok: true, lead: updated, source: 'fallback' }))
+  }
+
+  if (path[0] === 'admin' && path[1] === 'leads' && path[2] && method === 'DELETE') {
+    if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+    const id = path[2]
+    const deleted = await deleteAdminLead(id)
+    if (!deleted) return cors(NextResponse.json({ error: 'Lead not found' }, { status: 404 }))
+    return cors(NextResponse.json({ ok: true, source: 'fallback' }))
+  }
+
   return null
 }
 
@@ -246,7 +368,7 @@ async function handleRoute(request, { params }) {
 
   if (route === '/admin/login' && method === 'POST') {
     const body = await request.json()
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+    const expectedPassword = process.env.ADMIN_PASSWORD || 'Property@2026'
     if (body.password === expectedPassword) {
       return cors(NextResponse.json({ ok: true, token: expectedPassword }))
     }
@@ -275,9 +397,12 @@ async function handleRoute(request, { params }) {
         const deleted = await deleteAdminProperty(identifier)
         return cors(NextResponse.json({ ok: deleted, source: 'fallback' }))
       }
-      const fallback = await fallbackRoute(route, method, url, path)
+      
+      const fallback = await fallbackRoute(route, method, url, path, request)
       if (fallback) return fallback
-      throw mongoError
+      
+      console.error('Mongo error and no fallback route matched:', mongoError)
+      return cors(NextResponse.json({ error: 'Database unavailable' }, { status: 503 }))
     }
 
     if ((route === '/' || route === '/health') && method === 'GET') {
@@ -366,7 +491,7 @@ async function handleRoute(request, { params }) {
     // POST /api/admin/login
     if (route === '/admin/login' && method === 'POST') {
       const body = await request.json()
-      const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+      const expectedPassword = process.env.ADMIN_PASSWORD || 'Property@2026'
       if (body.password === expectedPassword) {
         return cors(NextResponse.json({ ok: true, token: expectedPassword }))
       }
@@ -375,7 +500,7 @@ async function handleRoute(request, { params }) {
 
     // Admin-protected routes
     const adminToken = request.headers.get('x-admin-token')
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
+    const expectedPassword = process.env.ADMIN_PASSWORD || 'Property@2026'
     const isAdmin = adminToken === expectedPassword
 
     if (route === '/admin/leads' && method === 'GET') {
@@ -407,6 +532,13 @@ async function handleRoute(request, { params }) {
       if (Object.keys(ops).length) await db.collection('leads').updateOne({ id }, ops)
       const updated = await db.collection('leads').findOne({ id })
       return cors(NextResponse.json({ ok: true, lead: clean(updated) }))
+    }
+
+    if (path[0] === 'admin' && path[1] === 'leads' && path[2] && method === 'DELETE') {
+      if (!isAdmin) return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const id = path[2]
+      const result = await db.collection('leads').deleteOne({ id })
+      return cors(NextResponse.json({ ok: result.deletedCount > 0 }))
     }
 
     if (route === '/admin/properties' && method === 'GET') {

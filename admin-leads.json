@@ -1,0 +1,30 @@
+[
+  {
+    "id": "b53d07c8-dacd-4266-b778-e452a0a317ad",
+    "name": "ankit sir",
+    "mobile": "6201798489",
+    "email": "sir@gmail.com",
+    "budget": "1.5Cr+",
+    "propertySlug": null,
+    "propertyTitle": null,
+    "message": "thanku satish and rajan\n",
+    "source": "homepage_cta",
+    "status": "new",
+    "notes": [],
+    "createdAt": "2026-07-06T10:01:22.087Z"
+  },
+  {
+    "id": "c554c3ba-1ace-405d-9d44-57b6c11d71f1",
+    "name": "priya kumari",
+    "mobile": "7070573880",
+    "email": "meow@gmail.com",
+    "budget": "60-80L",
+    "propertySlug": null,
+    "propertyTitle": null,
+    "message": "djfdfsdfsd",
+    "source": "homepage_cta",
+    "status": "new",
+    "notes": [],
+    "createdAt": "2026-07-06T09:53:32.017Z"
+  }
+]

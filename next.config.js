@@ -12,6 +12,8 @@ const nextConfig = {
   },
   // Renamed from experimental.serverComponentsExternalPackages in Next 15
   serverExternalPackages: ['mongodb'],
+  // Allow using Turbopack (Next 16) while keeping a custom webpack config
+  turbopack: {},
   webpack(config, { dev }) {
     if (dev) {
       // Reduce CPU/memory from file watching

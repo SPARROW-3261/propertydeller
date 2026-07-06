@@ -220,6 +220,17 @@ export default function AdminPage() {
     } catch (e) { toast.error(e.message) }
   }
 
+  const deleteLead = async (id) => {
+    if (!window.confirm('Delete this lead? This cannot be undone.')) return
+    try {
+      const res = await fetch(`/api/admin/leads/${id}`, { method: 'DELETE', headers: { 'x-admin-token': token } })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Delete failed')
+      setLeads(prev => prev.filter(l => l.id !== id))
+      toast.success('Lead deleted')
+    } catch (e) { toast.error(e.message) }
+  }
+
   const logout = () => { localStorage.removeItem('fir_admin_token'); setToken(null); setLeads([]) }
 
   const filteredLeads = filter === 'all' ? leads : leads.filter(l => l.status === filter)
@@ -453,7 +464,7 @@ export default function AdminPage() {
                         </Select>
                       </td>
                       <td className="p-4 text-xs text-navy-700/70">{new Date(l.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                      <td className="p-4">
+                      <td className="p-4 flex items-center gap-2">
                         <Dialog>
                           <DialogTrigger asChild><Button size="sm" variant="outline" onClick={() => setActiveLead(l)}>View</Button></DialogTrigger>
                           <DialogContent className="max-w-lg">
@@ -478,6 +489,7 @@ export default function AdminPage() {
                             </div>
                           </DialogContent>
                         </Dialog>
+                        <Button size="sm" variant="outline" className="text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => deleteLead(l.id)}>Delete</Button>
                       </td>
                     </tr>
                   )
